@@ -1,8 +1,9 @@
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+import constants
 import requests
 from flask import Flask, jsonify, request
 
@@ -14,50 +15,74 @@ logging.basicConfig(filename='info.log', level=logging.INFO)
 @dataclass
 class BikeSystem:
     system: str
-    url: str
     data: dict[str, dict]
     sna_map: dict[str, str]
+    page_urls: list[str] = field(default_factory=list)
+    url: list[str] = field(default_factory=list)
 
 
 YOUBIKE = BikeSystem(
     system='1',
-    url='https://data.ntpc.gov.tw/api/datasets/71cd1490-a2df-4198-bef1-318479775e8a/json',
     data={},
     sna_map={},
+    page_urls=[constants.XINBEI_YOUBIKE_URL],
 )
 
 YOUBIKE2 = BikeSystem(
     system='2',
-    url='https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json',
     data={},
     sna_map={},
+    page_urls=[constants.XINBEI_YOUBIKE2_URL],
+    url=[constants.TAIPEI_YOUBIKE2_URL],
 )
 
 
 SYNC_INTERVAL = 180
 
 
-def get_all_stations_info(bike_system: BikeSystem):
+def get_data_by_page_url(bike_system: BikeSystem, page_url: str):
     page = 0
     size = 200
-    while True:
+    err_cnt = 0
+    while err_cnt < 3:
         try:
             params = {
                 'page': page,
                 'size': size,
             }
-            resp = requests.get(bike_system.url, params=params, timeout=10).json()
+            resp = requests.get(page_url, params=params, timeout=10).json()
             if not resp:
                 break
 
             bike_system.data.update({station['sno']: station for station in resp})
             bike_system.sna_map.update({station['sna']: station['sno'] for station in resp})
-
             page += 1
 
         except Exception as e:
-            logging.error('request error', e)
+            err_cnt += 1
+            logging.error('Get data error | url: %s | params: %s | error: %s', page_url, params, e)
             time.sleep(3)
+
+
+def get_data_by_url(bike_system: BikeSystem, url: str):
+    try:
+        resp = requests.get(url, timeout=10).json()
+        if not resp:
+            raise Exception('Url response is empty')
+
+        bike_system.data.update({station['sno']: station for station in resp})
+        bike_system.sna_map.update({station['sna']: station['sno'] for station in resp})
+
+    except Exception as e:
+        logging.error('Get data error | url: %s | error: %s', url, e)
+
+
+def get_all_stations_info(bike_system: BikeSystem):
+    for page_url in bike_system.page_urls:
+        get_data_by_page_url(bike_system, page_url)
+
+    for url in bike_system.url:
+        get_data_by_url(bike_system, url)
 
 
 def sync_bike_resource():
