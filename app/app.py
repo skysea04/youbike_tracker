@@ -2,6 +2,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from functools import wraps
 
 import constants
 import requests
@@ -9,7 +10,7 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 # Configure logging
-logging.basicConfig(filename='info.log', level=logging.INFO)
+logging.basicConfig(filename='info.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 @dataclass
@@ -37,7 +38,7 @@ YOUBIKE2 = BikeSystem(
 )
 
 
-SYNC_INTERVAL = 180
+SYNC_INTERVAL = 120
 
 
 def get_data_by_page_url(bike_system: BikeSystem, page_url: str):
@@ -92,7 +93,18 @@ def sync_bike_resource():
         time.sleep(SYNC_INTERVAL)
 
 
+def log_request(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        resp = func(*args, **kwargs)
+        logging.info('Request: ip=%s, url=%s, resp=%s', request.remote_addr, request.url, resp.json)
+
+        return resp
+    return wrapper
+
+
 @app.route('/sno', methods=['GET'])
+@log_request
 def get_station_sno():
     """Get station sno by station name
 
@@ -120,6 +132,7 @@ def get_station_sno():
 
 
 @app.route('/track/sno', methods=['GET'])
+@log_request
 def get_availability_by_sno():
     """Get the available bikes and parking spaces between two stations
 
@@ -158,6 +171,7 @@ def get_availability_by_sno():
 
 
 @app.route('/track/name', methods=['GET'])
+@log_request
 def get_availability_by_name():
     """Get the available bikes and parking spaces between two stations
 
