@@ -10,7 +10,7 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 # Configure logging
-logging.basicConfig(filename='info.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# logging.basicConfig(filename='info.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 @dataclass
@@ -93,18 +93,18 @@ def sync_bike_resource():
         time.sleep(SYNC_INTERVAL)
 
 
-def log_request(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        resp = func(*args, **kwargs)
-        logging.info('Request: ip=%s, url=%s, resp=%s', request.remote_addr, request.url, resp.json)
+# def log_request(func):
+#     @wraps(func)
+#     def wrapper(*args, **kwargs):
+#         logging.info('Request: ip=%s, url=%s', request.remote_addr, request.url)
+#         resp = func(*args, **kwargs)
 
-        return resp
-    return wrapper
+#         return resp
+#     return wrapper
 
 
 @app.route('/sno', methods=['GET'])
-@log_request
+# @log_request
 def get_station_sno():
     """Get station sno by station name
 
@@ -132,7 +132,7 @@ def get_station_sno():
 
 
 @app.route('/track/sno', methods=['GET'])
-@log_request
+# @log_request
 def get_availability_by_sno():
     """Get the available bikes and parking spaces between two stations
 
@@ -171,7 +171,7 @@ def get_availability_by_sno():
 
 
 @app.route('/track/name', methods=['GET'])
-@log_request
+# @log_request
 def get_availability_by_name():
     """Get the available bikes and parking spaces between two stations
 

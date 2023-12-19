@@ -1,8 +1,7 @@
 version: '3.4'
 
 services:
-  youbiketracker:
-    image: youbiketracker
+  app:
     build:
       context: .
       dockerfile: ./Dockerfile
