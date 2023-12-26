@@ -1,12 +1,12 @@
 version: '3.4'
 
 services:
-  youbiketracker:
-    image: youbiketracker
+  app:
     build:
       context: .
       dockerfile: ./Dockerfile
     volumes:
       - ./app:/app
+    command: ["sh", "-c", "tail -f /dev/null"]
     ports:
       - 5002:5002

@@ -1,110 +1,27 @@
-import logging
-import threading
-import time
-from dataclasses import dataclass, field
+import traceback
 from functools import wraps
 
-import constants
-import requests
 from flask import Flask, jsonify, request
+from services import YOUBIKE, YOUBIKE2
 
 app = Flask(__name__)
-# Configure logging
-logging.basicConfig(filename='info.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+app.config['JSON_AS_ASCII'] = False
 
 
-@dataclass
-class BikeSystem:
-    system: str
-    data: dict[str, dict]
-    sna_map: dict[str, str]
-    page_urls: list[str] = field(default_factory=list)
-    url: list[str] = field(default_factory=list)
-
-
-YOUBIKE = BikeSystem(
-    system='1',
-    data={},
-    sna_map={},
-    page_urls=[constants.XINBEI_YOUBIKE_URL],
-)
-
-YOUBIKE2 = BikeSystem(
-    system='2',
-    data={},
-    sna_map={},
-    page_urls=[constants.XINBEI_YOUBIKE2_URL],
-    url=[constants.TAIPEI_YOUBIKE2_URL],
-)
-
-
-SYNC_INTERVAL = 120
-
-
-def get_data_by_page_url(bike_system: BikeSystem, page_url: str):
-    page = 0
-    size = 200
-    err_cnt = 0
-    while err_cnt < 3:
-        try:
-            params = {
-                'page': page,
-                'size': size,
-            }
-            resp = requests.get(page_url, params=params, timeout=10).json()
-            if not resp:
-                break
-
-            bike_system.data.update({station['sno']: station for station in resp})
-            bike_system.sna_map.update({station['sna']: station['sno'] for station in resp})
-            page += 1
-
-        except Exception as e:
-            err_cnt += 1
-            logging.error('Get data error | url: %s | params: %s | error: %s', page_url, params, e)
-            time.sleep(3)
-
-
-def get_data_by_url(bike_system: BikeSystem, url: str):
-    try:
-        resp = requests.get(url, timeout=10).json()
-        if not resp:
-            raise Exception('Url response is empty')
-
-        bike_system.data.update({station['sno']: station for station in resp})
-        bike_system.sna_map.update({station['sna']: station['sno'] for station in resp})
-
-    except Exception as e:
-        logging.error('Get data error | url: %s | error: %s', url, e)
-
-
-def get_all_stations_info(bike_system: BikeSystem):
-    for page_url in bike_system.page_urls:
-        get_data_by_page_url(bike_system, page_url)
-
-    for url in bike_system.url:
-        get_data_by_url(bike_system, url)
-
-
-def sync_bike_resource():
-    while True:
-        get_all_stations_info(YOUBIKE)
-        get_all_stations_info(YOUBIKE2)
-        time.sleep(SYNC_INTERVAL)
-
-
-def log_request(func):
+def catch_exceptions(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        resp = func(*args, **kwargs)
-        logging.info('Request: ip=%s, url=%s, resp=%s', request.remote_addr, request.url, resp.json)
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
 
-        return resp
     return wrapper
 
 
 @app.route('/sno', methods=['GET'])
-@log_request
+@catch_exceptions
 def get_station_sno():
     """Get station sno by station name
 
@@ -122,6 +39,7 @@ def get_station_sno():
         return jsonify({'error': 'Bad Request'}), 400
 
     system = YOUBIKE if system == YOUBIKE.system else YOUBIKE2
+    system.get_all_stations_info()
 
     sna_map = {}
     for sna, sno in system.sna_map.items():
@@ -132,7 +50,7 @@ def get_station_sno():
 
 
 @app.route('/track/sno', methods=['GET'])
-@log_request
+@catch_exceptions
 def get_availability_by_sno():
     """Get the available bikes and parking spaces between two stations
 
@@ -154,6 +72,7 @@ def get_availability_by_sno():
         return jsonify({'error': 'Bad Request'}), 400
 
     system = YOUBIKE if system == YOUBIKE.system else YOUBIKE2
+    system.get_all_stations_info()
     depart_info = system.data.get(depart)
     arrive_info = system.data.get(arrive)
 
@@ -171,7 +90,7 @@ def get_availability_by_sno():
 
 
 @app.route('/track/name', methods=['GET'])
-@log_request
+@catch_exceptions
 def get_availability_by_name():
     """Get the available bikes and parking spaces between two stations
 
@@ -193,6 +112,7 @@ def get_availability_by_name():
         return jsonify({'error': 'Bad Request'}), 400
 
     system = YOUBIKE if system == YOUBIKE.system else YOUBIKE2
+    system.get_all_stations_info()
     depart_info = system.data.get(system.sna_map.get(depart, ''))
     arrive_info = system.data.get(system.sna_map.get(arrive, ''))
 
@@ -212,6 +132,3 @@ def get_availability_by_name():
 @app.route('/', methods=['GET'])
 def index():
     return 'This is a Youbike tracker'
-
-
-threading.Thread(target=sync_bike_resource).start()
