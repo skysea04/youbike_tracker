@@ -1,5 +1,7 @@
+import asyncio
 import time
 from functools import wraps
+from typing import Coroutine
 
 
 def class_local_cache(expire_time: int = 60):
@@ -26,3 +28,10 @@ def class_local_cache(expire_time: int = 60):
 
         return wrapper
     return decorator
+
+
+async def async_run_tasks(coroutines: list[Coroutine]) -> list[asyncio.Task]:
+    tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
+    await asyncio.wait(tasks)
+
+    return tasks
